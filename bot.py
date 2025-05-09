@@ -5,10 +5,12 @@ from telegram.ext import AIORateLimiter
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 
+# تحميل المتغيرات من ملف .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
+# بيانات الدروس
 fields = {
     "2d3d": {
         "title": "2D & 3D",
@@ -64,12 +66,27 @@ fields = {
     }
 }
 
+# إنشاء البوت
+app = ApplicationBuilder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CallbackQueryHandler(button_handler))
+
+# إنشاء تطبيق FastAPI
+fastapi_app = FastAPI()
+
+# ضبط Webhook عند بدء التشغيل
+@fastapi_app.on_event("startup")
+async def on_startup():
+    await app.bot.set_webhook(WEBHOOK_URL)
+
+# قائمة الأقسام
 def main_menu():
     keyboard = [
         [InlineKeyboardButton(v["title"], callback_data=k)] for k, v in fields.items()
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# قائمة الدروس
 def lessons_menu(field_key):
     field = fields[field_key]
     keyboard = [
@@ -79,9 +96,11 @@ def lessons_menu(field_key):
     keyboard.append([InlineKeyboardButton("رجوع", callback_data="back_to_main")])
     return InlineKeyboardMarkup(keyboard)
 
+# أمر /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("مرحبًا بك في بوت تطوير المهارات!\nاختر أحد الأقسام:", reply_markup=main_menu())
 
+# معالجة الأزرار
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -110,17 +129,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 break
 
-# FastAPI App
-fastapi_app = FastAPI()
-
-@app.on_startup
-async def on_startup():
-    await app.bot.set_webhook(WEBHOOK_URL)
-
-app = ApplicationBuilder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(button_handler))
-
+# نقطة استقبال Webhook من Telegram
 @fastapi_app.post("/")
 async def telegram_webhook(req: Request):
     data = await req.json()
