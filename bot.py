@@ -1,4 +1,6 @@
 import os
+import asyncio
+import aiohttp  # <-- إضافة هذه المكتبة
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -9,14 +11,13 @@ from telegram.ext import (
 )
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
-import asyncio
+
 # تحميل المتغيرات من .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# بيانات الدروس
-fields = {
+# ... (بقية كود الدروس والقوائم والأوامر كما هو)
     "2d3d": {
         "title": "2D & 3D",
         "lessons": {
@@ -84,7 +85,6 @@ def lessons_menu(field_key):
     ]
     keyboard.append([InlineKeyboardButton("رجوع", callback_data="back_to_main")])
     return InlineKeyboardMarkup(keyboard)
-
 # أوامر البوت
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("مرحبًا بك في بوت تطوير المهارات!\nاختر أحد الأقسام:", reply_markup=main_menu())
@@ -116,34 +116,54 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=InlineKeyboardMarkup(buttons)
                 )
                 break
-
 # إنشاء تطبيق Telegram
 app = ApplicationBuilder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button_handler))
 
-
 # إنشاء تطبيق FastAPI
-fastapi_app = FastAPI()
+fastapi_app = FastAPI()  # <-- يجب تعريفه هنا قبل استخدامه
 
 @fastapi_app.on_event("startup")
 async def on_startup():
-    retry_count = 0
-    max_retries = 5
-    while retry_count < max_retries:
+    await asyncio.sleep(10)  # انتظر 10 ثوانٍ لضمان تشغيل الخدمة
+    webhook_url = f"{WEBHOOK_URL}/webhook"
+    
+    try:
+        # اختبر اتصال الخدمة أولاً
+        async with aiohttp.ClientSession() as session:
+            async with session.get(WEBHOOK_URL) as resp:
+                if resp.status != 200:
+                    print(f"⚠️ Service returned status: {resp.status}")
+                    return
+
+        await app.bot.delete_webhook()
+        await app.bot.set_webhook(webhook_url)
+        print(f"✅ Webhook set successfully at: {webhook_url}")
+        
+        # إعلام المطور بنجاح التشغيل
+        await app.bot.send_message(
+            chat_id=YOUR_CHAT_ID,  # <-- استبدلها برقم شاتك
+            text=f"✅ البوت يعمل الآن!\nWEBHOOK: {webhook_url}"
+        )
+    except Exception as e:
+        error_msg = f"❌ فشل إعداد الويب هوك: {str(e)}"
+        print(error_msg)
         try:
-            await app.bot.delete_webhook()  # تم تصحيح الخطأ الإملائي هنا
-            await app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")  # إضافة /webhook للرابط
-            print("✅ Webhook configured successfully!")
-            break
-        except Exception as e:
-            retry_count += 1
-            print(f"⚠️ Attempt {retry_count} failed: {str(e)}")
-            await asyncio.sleep(3)
+            await app.bot.send_message(
+                chat_id=YOUR_CHAT_ID,  # <-- استبدلها برقم شاتك
+                text=error_msg
+            )
+        except:
+            print("⚠️ فشل إرسال رسالة الخطأ")
 
 @fastapi_app.post("/webhook")
-async def telegram_webhook(req: Request):
-    data = await req.json()
-    update = Update.de_json(data, app.bot)
-    await app.process_update(update)
-    return {"ok": True}
+async def telegram_webhook(request: Request):
+    try:
+        data = await request.json()
+        update = Update.de_json(data, app.bot)
+        await app.process_update(update)
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"❌ خطأ في معالجة الطلب: {str(e)}")
+        return {"status": "error"}, 500
