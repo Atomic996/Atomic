@@ -9,7 +9,7 @@ from telegram.ext import (
 )
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
-
+import asyncio
 # تحميل المتغيرات من .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -122,14 +122,26 @@ app = ApplicationBuilder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button_handler))
 
+
 # إنشاء تطبيق FastAPI
 fastapi_app = FastAPI()
 
 @fastapi_app.on_event("startup")
 async def on_startup():
-    await app.bot.set_webhook(WEBHOOK_URL)
+    retry_count = 0
+    max_retries = 5
+    while retry_count < max_retries:
+        try:
+            await app.bot.delete_webhook()  # تم تصحيح الخطأ الإملائي هنا
+            await app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")  # إضافة /webhook للرابط
+            print("✅ Webhook configured successfully!")
+            break
+        except Exception as e:
+            retry_count += 1
+            print(f"⚠️ Attempt {retry_count} failed: {str(e)}")
+            await asyncio.sleep(3)
 
-@fastapi_app.post("/")
+@fastapi_app.post("/webhook")
 async def telegram_webhook(req: Request):
     data = await req.json()
     update = Update.de_json(data, app.bot)
