@@ -2,11 +2,8 @@ services:
   - type: web
     name: telegram-bot
     env: python
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "pip install -r requirements.txt && python -m pip install --upgrade pip"
     startCommand: "uvicorn bot:fastapi_app --host 0.0.0.0 --port $PORT"
     envVars:
-      - key: BOT_TOKEN
-        value:  7675768972:AAHoFsvoC3wwl3-iOyECHdNXrOpl6_ZiB7k# ← الأفضل استخدام متغيرات Render السرية
-      - key: WEBHOOK_URL
-        value: https://atomic96.onrender.com
-        
+      - key: PORT
+        value: 10000  # أو أي منفذ تفضله
