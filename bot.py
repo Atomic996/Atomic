@@ -126,6 +126,10 @@ telegram_app.add_handler(CallbackQueryHandler(button_handler))
 # إنشاء تطبيق FastAPI
 fastapi_app = FastAPI()
 
+@fastapi_app.get("/")
+async def root():
+    return {"status": "ok"}
+
 @fastapi_app.on_event("startup")
 async def on_startup():
     retry_count = 0
