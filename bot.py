@@ -1,7 +1,7 @@
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder,
+    Application,
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
@@ -10,6 +10,7 @@ from telegram.ext import (
 from fastapi import FastAPI, Request
 from dotenv import load_dotenv
 import asyncio
+
 # تحميل المتغيرات من .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -118,9 +119,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
 
 # إنشاء تطبيق Telegram
-app = ApplicationBuilder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(button_handler))
+telegram_app = Application.builder().token(BOT_TOKEN).rate_limiter(AIORateLimiter()).build()
+telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(CallbackQueryHandler(button_handler))
 
 # إنشاء تطبيق FastAPI
 fastapi_app = FastAPI()
@@ -131,8 +132,8 @@ async def on_startup():
     max_retries = 5
     while retry_count < max_retries:
         try:
-            await app.bot.delete_webhook()  # تم تصحيح الخطأ الإملائي هنا
-            await app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")  # إضافة /webhook للرابط
+            await telegram_app.bot.delete_webhook(drop_pending_updates=True)
+            await telegram_app.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
             print("✅ Webhook configured successfully!")
             break
         except Exception as e:
@@ -143,6 +144,6 @@ async def on_startup():
 @fastapi_app.post("/webhook")
 async def telegram_webhook(req: Request):
     data = await req.json()
-    update = Update.de_json(data, app.bot)
-    await app.process_update(update)
+    update = Update.de_json(data, telegram_app.bot)  # يعمل بدون مشاكل هنا
+    await telegram_app.process_update(update)
     return {"ok": True}
